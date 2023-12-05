@@ -1,14 +1,29 @@
 // Importing necessary dependencies
 const express = require("express");
-const cors = require("cors"); 
-require("dotenv").config();
+const cors = require("cors");
+const dotenv = require("dotenv");
 const multer = require("multer");
+const fs = require("fs");
+const msRest = require("@azure/ms-rest-js");
+const axios = require("axios");
+const FormData = require("form-data");
+// const { PredictionAPIClient } = require("@azure/cognitiveservices-customvision-prediction");
+
+dotenv.config();
+
+// Assign env variables
+const VISION_PREDICTION_KEY = process.env["VISION_PREDICTION_KEY"];
+const VISION_PREDICTION_RESOURCE_ID =
+  process.env["VISION_PREDICTION_RESOURCE_ID"];
+const VISION_PREDICTION_ENDPOINT = process.env["VISION_PREDICTION_ENDPOINT"];
+const PROJECT_ID = process.env["PROJECT_ID"];
+const PORT = process.env["PORT"];
 
 // Create an instance of the Express application
-const app = express(); 
+const app = express();
 
 // Enable CORS to allow requests from a specific origin
-app.use(cors({ origin: "http://localhost:3000", credentials: true })); 
+app.use(cors({ origin: "http://localhost:3000", credentials: true }));
 
 // Multer storage configuration for handling file uploads
 const storageEngine = multer.diskStorage({
@@ -48,21 +63,32 @@ const checkFileType = function (file, cb) {
 app.post("/uploadsingleimage", upload.single("image"), async (req, res) => {
   console.log("Received image", req.body);
 
-  // Check if an image file was successfully uploaded
-  if (req.file) {
-    return res.status(201).json({
-      message: "Thank you for uploading image",
-    });
-  }
+  // uploads and processes the image on the server side/custom vision
+  try {
+    const formData = new FormData();
+    formData.append("image", fs.createReadStream(req.file.path));
 
-  // If no valid image file was uploaded, respond with a 400 Bad Request status and an error message
-  res.status(400).json({
-    message: "Please upload a valid image",
-  });
+    const response = await axios.post(
+      process.env.VISION_PREDICTION_ENDPOINT,
+      formData,
+      {
+        headers: {
+          "Prediction-Key": process.env.VISION_PREDICTION_KEY,
+          ...formData.getHeaders(),
+        },
+      }
+    );
+
+    const responseData = response.data;
+    res.json(responseData);
+  } catch (error) {
+    console.error("Error processing image:", error);
+    res.status(500).send("Internal Server Error");
+  }
 });
 
 // Set the server to listen on port 4000
-const PORT = 4000;
-app.listen(PORT, () => {
+
+app.listen(PORT || 4000, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
