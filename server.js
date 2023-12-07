@@ -1,3 +1,13 @@
+// Database connection
+const mongoose = require("mongoose");
+
+// Map global promise - get rid of warnign
+mongoose.Promise = global.Promise;
+
+// Connect to DB
+mongoose.connect("mongodb://localhost:27017/turners"); 
+
+
 // Importing necessary dependencies
 const express = require("express");
 const cors = require("cors");
@@ -7,7 +17,6 @@ const fs = require("fs");
 const msRest = require("@azure/ms-rest-js");
 const axios = require("axios");
 const FormData = require("form-data");
-// const { PredictionAPIClient } = require("@azure/cognitiveservices-customvision-prediction");
 
 dotenv.config();
 
@@ -80,7 +89,31 @@ app.post("/uploadsingleimage", upload.single("image"), async (req, res) => {
     );
 
     const responseData = response.data;
-    res.json(responseData);
+    // -------
+    const predictions = responseData.predictions;
+
+    if (predictions && predictions.length > 0 ) {
+      const highestProbabilityTag = predictions.reduce((prev, current) => {
+        return prev.probability > current.probability ? prev : current;
+    })
+    console.log(highestProbabilityTag);
+
+    try {
+      // Query the database to retrieve all cars with the same tagName
+      const similarCarStockFromDb = await mongoose
+        .connection.collection("cars") // name of collection to retrieve from
+        .find({ bodyStyle: highestProbabilityTag.tagName })
+        .toArray();
+
+      console.log("Similar cars from the database:", similarCarStockFromDb);
+      // Send similar car stock back to the front end for display
+      res.json(similarCarStockFromDb);
+
+    } catch (error) {
+      console.error("Error querying the database:", error);
+    }
+
+    }
   } catch (error) {
     console.error("Error processing image:", error);
     res.status(500).send("Internal Server Error");
@@ -88,7 +121,6 @@ app.post("/uploadsingleimage", upload.single("image"), async (req, res) => {
 });
 
 // Set the server to listen on port 4000
-
 app.listen(PORT || 4000, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
